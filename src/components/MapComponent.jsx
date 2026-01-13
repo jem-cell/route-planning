@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { getRoute } from '../services/routing';
+// import { getRoute } from '../services/routing'; // Moved to Dashboard
 
 // Fix leaflet marker icons
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -45,50 +45,8 @@ const FitBounds = ({ markers }) => {
     return null;
 };
 
-export const MapComponent = ({ members, jobs }) => {
-    // State to store polylines for routes
-    const [routes, setRoutes] = useState([]);
-
-    // Fetch routes when jobs change
-    useEffect(() => {
-        const fetchRoutes = async () => {
-            const newRoutes = [];
-
-            for (const member of members) {
-                const memberJobs = jobs.filter(j => j.assignedTo === member.id && j.lat && j.lon);
-                // Group by day
-                const days = [...new Set(memberJobs.map(j => j.day))];
-
-                for (const day of days) {
-                    const dayJobs = memberJobs.filter(j => j.day === day)
-                        .sort((a, b) => a.durationFromHome - b.durationFromHome); // Ensure sorted order
-
-                    // Route: Home -> Job 1 -> Job 2 ... -> Home
-                    const points = [
-                        { lat: member.lat, lon: member.lon },
-                        ...dayJobs.map(j => ({ lat: j.lat, lon: j.lon })),
-                        { lat: member.lat, lon: member.lon }
-                    ];
-
-                    const coords = await getRoute(points);
-                    if (coords.length > 0) {
-                        newRoutes.push({
-                            color: member.color,
-                            positions: coords,
-                            key: `${member.id}-${day}`
-                        });
-                    }
-                }
-            }
-            setRoutes(newRoutes);
-        };
-
-        if (jobs.length > 0 && members.length > 0) {
-            fetchRoutes();
-        } else {
-            setRoutes([]);
-        }
-    }, [jobs, members]);
+export const MapComponent = ({ members, jobs, routes = [] }) => {
+    // Routes passed from parent to sync with time calculations
 
     // Prepare markers
     const memberMarkers = members.filter(m => m.lat && m.lon).map(m => ({

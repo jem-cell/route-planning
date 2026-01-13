@@ -112,7 +112,7 @@ function App() {
             </div>
           </div>
         ) : (
-          <Dashboard members={members} jobs={jobs} />
+          <Dashboard members={members.slice(0, teamSize)} jobs={jobs} />
         )}
       </main>
     </div>

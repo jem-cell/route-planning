@@ -47,26 +47,32 @@ export const getDrivingDurations = async (origins, destinations) => {
 };
 
 /**
- * Fetch full route geometry for a sequence of points.
+ * Fetch full route geometry and leg details for a sequence of points.
  * @param {Array<{lat, lon}>} points 
- * @returns {Promise<Array<[lat, lon]>>} Array of coordinates for the polyline
+ * @returns {Promise<{coordinates:Array<[lat, lon]>, legs:Array<{duration:number, distance:number}>}>} 
  */
 export const getRoute = async (points) => {
-    if (points.length < 2) return [];
+    if (points.length < 2) return { coordinates: [], legs: [] };
 
     const coordsString = points.map(p => `${p.lon},${p.lat}`).join(';');
     // geometries=geojson returns standard GeoJSON LineString coordinates
+    // overview=full gives full path
+    // steps=false (default) but legs=true implicitly with multiple waypoints
     const url = `${OSRM_BASE_URL}/route/v1/driving/${coordsString}?overview=full&geometries=geojson`;
 
     try {
         const response = await axios.get(url);
         if (response.data && response.data.routes && response.data.routes.length > 0) {
-            // OSRM returns [lon, lat], Leaflet needs [lat, lon]
-            return response.data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+            const route = response.data.routes[0];
+            return {
+                // OSRM returns [lon, lat], Leaflet needs [lat, lon]
+                coordinates: route.geometry.coordinates.map(c => [c[1], c[0]]),
+                legs: route.legs // Array of leg objects, each has .duration (seconds) & .distance (meters)
+            };
         }
-        return [];
+        return { coordinates: [], legs: [] };
     } catch (error) {
         console.error("Route fetch error", error);
-        return [];
+        return { coordinates: [], legs: [] };
     }
 };

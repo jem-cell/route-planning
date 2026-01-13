@@ -1,9 +1,49 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { MapComponent } from './MapComponent';
+import { getRoute } from '../services/routing';
 
 import { Download } from 'lucide-react';
 
 export const Dashboard = ({ members, jobs }) => {
+    // Stores route data: { "memberId-Day": { coordinates: [...], legs: [...] } }
+    const [routesData, setRoutesData] = useState({});
+
+    useEffect(() => {
+        const fetchAllRoutes = async () => {
+            const data = {};
+
+            for (const member of members) {
+                const memberJobs = jobs.filter(j => j.assignedTo === member.id && j.lat && j.lon);
+                const days = [...new Set(memberJobs.map(j => j.day))];
+
+                for (const day of days) {
+                    const dayJobs = memberJobs.filter(j => j.day === day)
+                        .sort((a, b) => a.durationFromHome - b.durationFromHome);
+
+                    // Route: Home -> Job 1 -> Job 2 ... -> Home
+                    const points = [
+                        { lat: member.lat, lon: member.lon }, // Home
+                        ...dayJobs.map(j => ({ lat: j.lat, lon: j.lon })), // Jobs
+                        { lat: member.lat, lon: member.lon } // Back Home
+                    ];
+
+                    const result = await getRoute(points);
+                    if (result.coordinates.length > 0) {
+                        data[`${member.id}-${day}`] = {
+                            coordinates: result.coordinates,
+                            legs: result.legs,
+                            color: member.color
+                        };
+                    }
+                }
+            }
+            setRoutesData(data);
+        };
+
+        if (jobs.length > 0 && members.length > 0) {
+            fetchAllRoutes();
+        }
+    }, [members, jobs]);
     const handleExport = () => {
         const headers = ['Postcode', 'Address', 'Assigned To', 'Day', 'Drive Time (min)'];
         const rows = jobs.map(j => {
@@ -82,8 +122,22 @@ export const Dashboard = ({ members, jobs }) => {
                                                                 <span className="text-[10px] text-gray-400 truncate max-w-[150px]">{job.display_name.split(',')[0]}</span>
                                                             )}
                                                         </div>
-                                                        <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded group-hover:bg-gray-200">
-                                                            ~{(job.durationFromHome / 60).toFixed(0)}m
+                                                        <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded group-hover:bg-gray-200" title="Travel time for this leg">
+                                                            {(() => {
+                                                                const routeKey = `${member.id}-${day}`;
+                                                                const dayRoute = routesData[routeKey];
+                                                                // Leg 0 is Home -> Job 1
+                                                                // Leg 1 is Job 1 -> Job 2
+                                                                // ...
+                                                                // Leg N is Job N -> Home
+                                                                // idx matches the leg index we care about for "arrival at job idx"
+                                                                // Job idx 0 arrived via Leg 0.
+                                                                if (dayRoute && dayRoute.legs && dayRoute.legs[idx]) {
+                                                                    const durationSec = dayRoute.legs[idx].duration;
+                                                                    return `~${(durationSec / 60).toFixed(0)}m`;
+                                                                }
+                                                                return '-';
+                                                            })()}
                                                         </span>
                                                     </div>
                                                 ))}
@@ -98,7 +152,15 @@ export const Dashboard = ({ members, jobs }) => {
 
                 {/* Map Area */}
                 <div className="flex-[1.5] rounded-xl border border-gray-200 shadow-lg overflow-hidden bg-white h-full relative">
-                    <MapComponent members={members} jobs={jobs} />
+                    <MapComponent
+                        members={members}
+                        jobs={jobs}
+                        routes={Object.entries(routesData).map(([key, data]) => ({
+                            key,
+                            positions: data.coordinates,
+                            color: data.color
+                        }))}
+                    />
                     <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur p-2 rounded shadow-md z-[1000] text-xs space-y-1">
                         <div className="font-bold mb-1">Legend</div>
                         {members.map(m => (
