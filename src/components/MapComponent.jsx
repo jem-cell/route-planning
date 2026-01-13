@@ -1,7 +1,8 @@
-import React from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import React, { useEffect, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import { getRoute } from '../services/routing';
 
 // Fix leaflet marker icons
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -16,12 +17,12 @@ let DefaultIcon = L.icon({
 L.Marker.prototype.options.icon = DefaultIcon;
 
 // Custom colored icon
-const getColoredIcon = (color) => {
-    // Generate a simple SVG icon with the color
+const getColoredIcon = (color, label = '') => {
+    // Generate a simple SVG icon with the color and label
     const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${color}" width="32" height="32" stroke="white" stroke-width="2">
         <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
-        <circle cx="12" cy="9" r="2.5" fill="white"/>
+        <text x="12" y="10" font-family="Arial" font-size="8" fill="white" text-anchor="middle" dy=".3em" font-weight="bold">${label}</text>
     </svg>`;
 
     return L.divIcon({
@@ -45,21 +46,77 @@ const FitBounds = ({ markers }) => {
 };
 
 export const MapComponent = ({ members, jobs }) => {
+    // State to store polylines for routes
+    const [routes, setRoutes] = useState([]);
+
+    // Fetch routes when jobs change
+    useEffect(() => {
+        const fetchRoutes = async () => {
+            const newRoutes = [];
+
+            for (const member of members) {
+                const memberJobs = jobs.filter(j => j.assignedTo === member.id && j.lat && j.lon);
+                // Group by day
+                const days = [...new Set(memberJobs.map(j => j.day))];
+
+                for (const day of days) {
+                    const dayJobs = memberJobs.filter(j => j.day === day)
+                        .sort((a, b) => a.durationFromHome - b.durationFromHome); // Ensure sorted order
+
+                    // Route: Home -> Job 1 -> Job 2 ... -> Home
+                    const points = [
+                        { lat: member.lat, lon: member.lon },
+                        ...dayJobs.map(j => ({ lat: j.lat, lon: j.lon })),
+                        { lat: member.lat, lon: member.lon }
+                    ];
+
+                    const coords = await getRoute(points);
+                    if (coords.length > 0) {
+                        newRoutes.push({
+                            color: member.color,
+                            positions: coords,
+                            key: `${member.id}-${day}`
+                        });
+                    }
+                }
+            }
+            setRoutes(newRoutes);
+        };
+
+        if (jobs.length > 0 && members.length > 0) {
+            fetchRoutes();
+        } else {
+            setRoutes([]);
+        }
+    }, [jobs, members]);
+
     // Prepare markers
     const memberMarkers = members.filter(m => m.lat && m.lon).map(m => ({
         ...m,
         type: 'HOME',
-        icon: getColoredIcon(m.color)
+        icon: getColoredIcon(m.color, 'H')
     }));
 
-    const jobMarkers = jobs.filter(j => j.lat && j.lon && j.assignedTo !== 'UNASSIGNED').map(j => {
-        const assignedMember = members.find(m => m.id === j.assignedTo);
-        return {
-            ...j,
-            type: 'JOB',
-            color: assignedMember?.color || 'gray',
-            icon: getColoredIcon(assignedMember?.color || 'gray') // Use smaller or dot icon ideally, but pin is fine
-        };
+    const jobMarkers = [];
+    members.forEach(member => {
+        const memberJobs = jobs.filter(j => j.assignedTo === member.id && j.lat && j.lon);
+        // Sort to get the correct index for labeling
+        const days = [...new Set(memberJobs.map(j => j.day))];
+
+        days.forEach(day => {
+            const dayJobs = memberJobs.filter(j => j.day === day)
+                .sort((a, b) => a.durationFromHome - b.durationFromHome);
+
+            dayJobs.forEach((job, idx) => {
+                jobMarkers.push({
+                    ...job,
+                    type: 'JOB',
+                    color: member.color,
+                    icon: getColoredIcon(member.color, idx + 1), // Label 1, 2, 3...
+                    order: idx + 1
+                });
+            });
+        });
     });
 
     const allMarkers = [...memberMarkers, ...jobMarkers];
@@ -71,6 +128,16 @@ export const MapComponent = ({ members, jobs }) => {
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
+
+            {routes.map((route) => (
+                <Polyline
+                    key={route.key}
+                    positions={route.positions}
+                    color={route.color}
+                    weight={4}
+                    opacity={0.6}
+                />
+            ))}
 
             {memberMarkers.map((m) => (
                 <Marker key={`home-${m.id}`} position={[m.lat, m.lon]} icon={m.icon} zIndexOffset={1000}>
@@ -85,7 +152,7 @@ export const MapComponent = ({ members, jobs }) => {
                 <Marker key={`job-${idx}`} position={[j.lat, j.lon]} icon={j.icon}>
                     <Popup>
                         Job: {j.postcode}<br />
-                        {j.day}<br />
+                        {j.day} - Stop #{j.order}<br />
                         {(j.durationFromHome / 60).toFixed(0)} min drive
                     </Popup>
                 </Marker>

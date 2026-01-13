@@ -45,3 +45,28 @@ export const getDrivingDurations = async (origins, destinations) => {
         throw error;
     }
 };
+
+/**
+ * Fetch full route geometry for a sequence of points.
+ * @param {Array<{lat, lon}>} points 
+ * @returns {Promise<Array<[lat, lon]>>} Array of coordinates for the polyline
+ */
+export const getRoute = async (points) => {
+    if (points.length < 2) return [];
+
+    const coordsString = points.map(p => `${p.lon},${p.lat}`).join(';');
+    // geometries=geojson returns standard GeoJSON LineString coordinates
+    const url = `${OSRM_BASE_URL}/route/v1/driving/${coordsString}?overview=full&geometries=geojson`;
+
+    try {
+        const response = await axios.get(url);
+        if (response.data && response.data.routes && response.data.routes.length > 0) {
+            // OSRM returns [lon, lat], Leaflet needs [lat, lon]
+            return response.data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+        }
+        return [];
+    } catch (error) {
+        console.error("Route fetch error", error);
+        return [];
+    }
+};
