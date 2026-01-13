@@ -13,6 +13,7 @@ const INITIAL_MEMBERS = [
 ];
 
 function App() {
+  const [teamSize, setTeamSize] = useState(3);
   const [members, setMembers] = useState(INITIAL_MEMBERS);
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -40,7 +41,9 @@ function App() {
       }
 
       // 2. Allocate
-      const allocated = await allocateJobs(members.filter(m => m.valid), geocoded);
+      // Only use the first `teamSize` members, and only those that are valid
+      const activeMembers = members.slice(0, teamSize).filter(m => m.valid);
+      const allocated = await allocateJobs(activeMembers, geocoded);
 
       setJobs(allocated);
       setView('dashboard');
@@ -52,7 +55,7 @@ function App() {
     }
   };
 
-  const activeMembersLength = members.filter(m => m.valid).length;
+  const activeMembersLength = members.slice(0, teamSize).filter(m => m.valid).length;
 
   return (
     <div className="h-screen flex flex-col bg-gray-50 text-gray-900 font-sans selection:bg-blue-100">
@@ -92,12 +95,17 @@ function App() {
               <p className="text-gray-500 text-lg">Define your team's home bases and import the list of job postcodes to generate an optimized schedule.</p>
             </div>
 
-            <TeamSetup members={members} onUpdateMember={updateMember} />
+            <TeamSetup
+              members={members}
+              onUpdateMember={updateMember}
+              teamSize={teamSize}
+              setTeamSize={setTeamSize}
+            />
 
-            <div className={`transition-opacity duration-300 ${activeMembersLength < 3 ? "opacity-50 pointer-events-none grayscale" : "opacity-100"}`}>
-              {activeMembersLength < 3 && (
+            <div className={`transition-opacity duration-300 ${activeMembersLength < teamSize ? "opacity-50 pointer-events-none grayscale" : "opacity-100"}`}>
+              {activeMembersLength < teamSize && (
                 <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded-md mb-4 flex items-center gap-2">
-                  <span>⚠️</span> Please configure all 3 team members with valid, geocoded postcodes before importing jobs.
+                  <span>⚠️</span> Please configure all {teamSize} team members with valid, geocoded postcodes before importing jobs.
                 </div>
               )}
               <JobInput onImport={handleImport} isProcessing={loading} progress={progress} />

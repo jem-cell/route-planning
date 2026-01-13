@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { geocodePostcode } from '../services/geocoding';
 import { MapPin, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 
-export const TeamSetup = ({ members, onUpdateMember }) => {
+export const TeamSetup = ({ members, onUpdateMember, teamSize, setTeamSize }) => {
     const [loading, setLoading] = useState({});
 
     const handlePostcodeBlur = async (id, postcode) => {
@@ -23,11 +23,33 @@ export const TeamSetup = ({ members, onUpdateMember }) => {
 
     return (
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mb-6">
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-gray-800">
-                <MapPin className="w-5 h-5 text-blue-600" /> Team Configuration
+            <h2 className="text-xl font-bold mb-4 flex items-center justify-between text-gray-800">
+                <div className="flex items-center gap-2">
+                    <MapPin className="w-5 h-5 text-blue-600" /> Team Configuration
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                    <span className="text-gray-500">Team Size:</span>
+                    <div className="flex rounded-md shadow-sm" role="group">
+                        {[1, 2, 3].map(size => (
+                            <button
+                                key={size}
+                                onClick={() => setTeamSize(size)}
+                                className={`px-3 py-1 border text-sm font-medium transition-colors
+                                ${size === 1 ? 'rounded-l-lg' : ''} 
+                                ${size === 3 ? 'rounded-r-lg' : ''}
+                                ${teamSize === size
+                                        ? 'bg-blue-600 text-white border-blue-600'
+                                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                                    }`}
+                            >
+                                {size}
+                            </button>
+                        ))}
+                    </div>
+                </div>
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {members.map((member, idx) => (
+                {members.slice(0, teamSize).map((member, idx) => (
                     <div key={member.id} className="border p-4 rounded-md relative bg-gray-50 hover:shadow-md transition-shadow">
                         <div className='absolute top-4 right-4 w-3 h-3 rounded-full shadow-sm' style={{ backgroundColor: member.color }}></div>
 
@@ -51,7 +73,7 @@ export const TeamSetup = ({ members, onUpdateMember }) => {
                                     onChange={(e) => onUpdateMember(member.id, { ...member, postcode: e.target.value })}
                                     onBlur={(e) => handlePostcodeBlur(member.id, e.target.value)}
                                     className={`w-full p-2 border rounded pr-8 bg-white focus:ring-2 outline-none transition-all ${member.valid === false ? 'border-red-500 focus:ring-red-200' :
-                                            member.valid === true ? 'border-green-500 focus:ring-green-200' : 'focus:ring-blue-200'
+                                        member.valid === true ? 'border-green-500 focus:ring-green-200' : 'focus:ring-blue-200'
                                         }`}
                                     placeholder="e.g. SW1A 1AA"
                                 />
